@@ -222,6 +222,11 @@ class QLearnPolicy(CleanPolicy):
 
         rbuf = np.zeros(300, dtype=np.float32)
         ri   = 0
+        reward_log = []
+        clean_log  = []
+        travel_log = []
+        ep_travel  = 0
+        ep_clean   = 0
 
         for ep in tqdm(range(episodes), desc="Training", unit="ep"):
             obs, _ = env_tl.reset()
@@ -268,6 +273,8 @@ class QLearnPolicy(CleanPolicy):
                 vp = int(visits[nx, ny])
                 if vp < vcap_-1: visits[nx, ny] = vp+1
                 bfs_visited[ny, nx] = True
+                if act in (2, 3, 4, 5): ep_travel += 1
+                if act == 1 and pd and not d: ep_clean += 1
 
                 r = float(rew)
                 if act == 1 and pd and not d: r += R_CLEAN
@@ -293,6 +300,11 @@ class QLearnPolicy(CleanPolicy):
                 ep_r += r
 
             eps = max(EPSILON_MIN, eps * EPSILON_DECAY)
+            reward_log.append(ep_r)
+            clean_log.append(ep_clean)
+            travel_log.append(ep_travel)
+            ep_travel = 0
+            ep_clean  = 0 
             rbuf[ri % 300] = ep_r; ri += 1
 
             if (ep+1) % 5000 == 0:
@@ -300,6 +312,12 @@ class QLearnPolicy(CleanPolicy):
                 print(f"  Ep {ep+1:>6} | ε={eps:.4f} | avg_r={avg:.1f}")
 
         env.unwrapped.murphy_proba = orig_murphy
-        self._save_qtable()
+        from tools import Tools
+        Tools.save_training_results(
+     self.world_id,
+     "q-learning_2",
+    {'reward': reward_log, 'cleaned': clean_log, 'travel': travel_log}
+     )
+        self._save_qtable()  
         self.trained = True
         print("\n✅ Training finished successfully!")
