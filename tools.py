@@ -16,7 +16,8 @@ import os, os.path
 import pickle
 import sys
 import logging
-
+import seaborn as sns
+import numpy as np
 class Tools:
     """
     A class with some util functions such as for saving simulation results 

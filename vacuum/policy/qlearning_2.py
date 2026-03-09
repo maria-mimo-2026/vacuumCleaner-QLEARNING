@@ -225,6 +225,7 @@ class QLearnPolicy(CleanPolicy):
         reward_log = []
         clean_log  = []
         travel_log = []
+        epsilon_log = []
         ep_travel  = 0
         ep_clean   = 0
 
@@ -300,6 +301,7 @@ class QLearnPolicy(CleanPolicy):
                 ep_r += r
 
             eps = max(EPSILON_MIN, eps * EPSILON_DECAY)
+            epsilon_log.append(eps)
             reward_log.append(ep_r)
             clean_log.append(ep_clean)
             travel_log.append(ep_travel)
@@ -316,8 +318,10 @@ class QLearnPolicy(CleanPolicy):
         Tools.save_training_results(
      self.world_id,
      "q-learning_2",
-    {'reward': reward_log, 'cleaned': clean_log, 'travel': travel_log}
+    {'epsilon': epsilon_log ,'reward': reward_log, 'cleaned': clean_log, 'travel': travel_log }
      )
+        from tools import Tools
+        Tools.plot_epsilon(episodes, epsilon_log)
         self._save_qtable()  
         self.trained = True
         print("\n✅ Training finished successfully!")
