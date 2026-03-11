@@ -232,7 +232,8 @@ class Tools:
         print(f"[debug] learning policies: {policies}")
         # I assume policies results ve the same metrics
         # number of graphs (axes) is the number of policies
-        metrics = list(data[policies[0]].keys())    # results metrics names
+        metrics = [m for m in data[policies[0]].keys() if m != 'epsilon']
+        #metrics = list(data[policies[0]].keys())     #results metrics names
         print(f"[debug] metrics: {metrics}")
         #logger.info(metrics)
         nbr_plots = len(metrics)

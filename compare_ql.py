@@ -49,9 +49,10 @@ def make_env(map_id):
 def run_tests(env, policy, label, n=N_RUNS):
     results = []
     print(f"  [{label}] testing {n} seeds...")
-    for seed in range(n):
+    seed = 0
+    for _ in range(n):
         obs, info = env.reset(seed=seed)
-        policy.reset(seed=seed)
+        policy.reset(seed=seed) 
         done = False
         while not done:
             action = policy.select_action(obs)

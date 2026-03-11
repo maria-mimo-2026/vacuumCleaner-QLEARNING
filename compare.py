@@ -50,9 +50,10 @@ def run_experiments(env, policy, n=N_RUNS):
     results = []
     print(f"  [{policy.policy_id}] running {n} experiments...")
 
-    for seed in range(n):
+    seed = 0
+    for _ in range(n):
         obs, info = env.reset(seed=seed)
-        policy.reset(seed=seed)
+        policy.reset(seed=seed) 
         done = False
 
         while not done:
