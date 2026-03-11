@@ -9,9 +9,6 @@ N_RUNS    = 10
 MAX_STEPS = 300   
 
 MAPS = [
-    "vacuum-2rooms",
-    "vacuum-3rooms-v0", "vacuum-3rooms-v1", "vacuum-3rooms-v2",
-    "vacuum-4rooms-v0", "vacuum-4rooms-v1", "vacuum-4rooms-v2", "vacuum-4rooms-v3",
     "vacuum-5rooms-v0", "vacuum-5rooms-v1", "vacuum-5rooms-v2", "vacuum-5rooms-v3", "vacuum-5rooms-v4",
     "vacuum-6rooms-v0", "vacuum-6rooms-v1", "vacuum-6rooms-v2",
     "vacuum-7rooms-v0",
