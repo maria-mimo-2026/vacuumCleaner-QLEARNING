@@ -39,8 +39,8 @@ def make_policy(policy_id, world_id, env, eco_mode):
 	elif n == 2:
 		p = GreedyPolicy(world_id, env, eco=eco_mode)
 	elif n == 3:
-		from vacuum.policy.qlearning_1 import QLearnPolicy as QL1  # ★ lazy import — fixes circular import
-		p = QL1(world_id, env)
+		from vacuum.policy.oqlearning import OQLearnPolicy  # ← اسم الكلاس في oqlearning.py
+		p= OQLearnPolicy(world_id, env)
 	elif n == 4:
 		from vacuum.policy.qlearning_2 import QLearnPolicy as QL2  # qlearning_2
 		p = QL2(world_id, env)
@@ -60,7 +60,7 @@ def get_policies():
 		"random": 0,			# pure random, reflex-based agent
 		"greedy-random": 1,		# greedy with some randomness, reflex-based agent
 		"greedy": 2,			# greedy, usually a relex-based agent with model	
-		"q-learning_1": 3,		# Q-learning, a learning-based agent
+		"oqlearning": 3,		# Q-learning, a learning-based agent
 	    "q-learning_2":4,
     }
 

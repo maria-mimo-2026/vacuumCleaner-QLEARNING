@@ -26,23 +26,16 @@ class OQLearnPolicy(CleanPolicy):
         self.visits = None
 
     def reset(self, seed=None):
-        """
-        Resets the policy by seeding the RNG.
-        When no seed is given, RNG is seeded once. 
-        The RNG is reseeded if a seed value is provided
-        Parameters:
-            seed (int): default value is None
-        """ 
-        if not self._seeded or seed is not None:
-            self._rng = np.random.default_rng(seed)
-            #print("[debug] np.random seeded with ", seed)
-            self._seeded = True
-        self.visits_level = np.zeros((n,n))   # level of number of visits per tile
-        # free parameters initialization
-        self.temperature = 1.0
-        self.epsilon = 0.95
-        self.alpha = 0.2
-
+     if not self._seeded or seed is not None:
+        self._rng = np.random.default_rng(seed)
+        self._seeded = True
+     self.visits_level = np.zeros((self.map_dimension, self.map_dimension))
+     n_states = self.map_dimension * self.map_dimension * 2
+     n_actions = self.env.action_space.n
+     self.q_table = np.zeros((n_states, n_actions))
+     self.temperature = 1.0
+     self.epsilon = 0.95
+     self.alpha = 0.2
     def encode_state(self, state):
         """
         Encode a state to optimize memory and lookup in Qtable
@@ -68,14 +61,13 @@ class OQLearnPolicy(CleanPolicy):
         self.epsilon = max(EPSILON_MIN, self.epsilon * EPSILON_DECAY)
             
     def select_action(self, state):
-        state_index = encode_state(state)
-        action = softmax_action_selection(state_index, self.temperature)
+     state_index = self.encode_state(state)  
+     action = self.softmax_action_selection(state_index, self.temperature)
+     return action  
+       
 
-    def softmax_action_selection(state_index, temperature=1.0):
-        # stochastic action selection based on Q values and 
-        # temperature
-        s = self.encode_state(state)
-        q_values = q_table[state]
-        exp_q = np.exp(q_values / temperature)
-        probabilities = exp_q / np.sum(exp_q)
-        return np.random.choice(len(q_values), p=probabilities)
+    def softmax_action_selection(self, state_index, temperature=1.0):  # أضف self
+     q_values = self.q_table[state_index]   # صحّح المتغيرات
+     exp_q = np.exp(q_values / temperature)
+     probabilities = exp_q / np.sum(exp_q)
+     return np.random.choice(len(q_values), p=probabilities)

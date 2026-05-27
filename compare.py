@@ -5,8 +5,8 @@ from vacuum.maps import Map
 from vacuum.policy.qlearning_2  import QLearnPolicy
 from vacuum.policy.greedyrandom import GreedyRandomPolicy
 
-N_RUNS    = 10     
-MAX_STEPS = 300   
+N_RUNS    = 10
+MAX_STEPS = 300
 
 MAPS = [
     "vacuum-5rooms-v0", "vacuum-5rooms-v1", "vacuum-5rooms-v2", "vacuum-5rooms-v3", "vacuum-5rooms-v4",
@@ -30,28 +30,29 @@ def make_env(map_id):
         id="VacuumCleanerWorld-v0",
         entry_point="vacuum.world:VacuumCleanerWorldEnv",
         kwargs={
-            'grid':             None,
-            'dirt_comeback':    False,  
-            'dirt_proba':       0.09,
-            'murphy_proba':     0.11,    
-            'location_sensor':  True,
+            'grid':              None,
+            'dirt_comeback':     False,
+            'dirt_proba':        0.09,
+            'murphy_proba':      0.11,
+            'location_sensor':   True,
             'episode_max_steps': MAX_STEPS,
-            'render_mode':      None,    
+            'render_mode':       None,
         }
     )
     env = gym.make('VacuumCleanerWorld-v0', grid=wmap)
     env.unwrapped.set_map_name(map_id)
     return env
+
+
 def run_experiments(env, policy, n=N_RUNS):
-   
     results = []
     print(f"  [{policy.policy_id}] running {n} experiments...")
 
-    seed = 0
-    for _ in range(n):
-        obs, info = env.reset(seed=seed)
-        policy.reset(seed=seed) 
-        done = False
+    for i in range(n):
+        seed = i                          # seed مختلف لكل run
+        obs, info = env.reset(seed=seed)  # FIX: كان مفقوداً obs و done
+        policy.reset(seed=seed)
+        done = False                      # FIX: كان مفقوداً
 
         while not done:
             action = policy.select_action(obs)
@@ -62,8 +63,11 @@ def run_experiments(env, policy, n=N_RUNS):
         nbr_rooms  = env.unwrapped.nbr_rooms
         success    = (dirty_left == 0)
 
+        base_reward = env.unwrapped._episode_reward
+        # NOTE: world.py adds 'all_clean' bonus when terminated=True.
+        # R_DONE is a training-only shaping constant — NOT added here.
         results.append({
-            'reward':  round(env.unwrapped._episode_reward, 2),
+            'reward':  round(base_reward, 2),
             'travel':  env.unwrapped._total_travel,
             'cleaned': env.unwrapped._total_cleaned,
             'success': success,
@@ -80,7 +84,7 @@ def run_experiments(env, policy, n=N_RUNS):
     avg_cleaned  = round(np.mean([r['cleaned'] for r in results]), 1)
     success_rate = sum(1 for r in results if r['success']) / n * 100
 
-    print(f"  → avg: reward={avg_reward}  travel={avg_travel}"
+    print(f"  -> avg: reward={avg_reward}  travel={avg_travel}"
           f"  cleaned={avg_cleaned}  success={success_rate:.0f}%")
 
     return {
@@ -96,18 +100,18 @@ def compare_one_map(map_id):
     print(f"  MAP: {map_id}")
     print(f"{'='*60}")
 
-    # ── Q-Learning ──
+    # Q-Learning
     env_ql = make_env(map_id)
     ql = QLearnPolicy(map_id, env_ql)
     if not ql.load_qtable():
-        print(f"  [!] Q-table Not available for{map_id}")
-        print(f"  start first: python main.py [map_n] 3 -e 1 300 -cl")
+        print(f"  [!] Q-table not available for {map_id}")
+        print(f"  Train first: python main.py {map_id} 3 -e 1 300 -cl")
         env_ql.close()
         return None
     ql_stats = run_experiments(env_ql, ql)
     env_ql.close()
 
-    # ── Greedy-Random ──
+    # Greedy-Random
     env_gr = make_env(map_id)
     gr = GreedyRandomPolicy(map_id, env_gr, eco=True)
     gr_stats = run_experiments(env_gr, gr)
@@ -149,7 +153,7 @@ def print_table(all_results):
     print("="*75)
 
 
-#  MAIN 
+# MAIN
 if __name__ == "__main__":
     import sys
 

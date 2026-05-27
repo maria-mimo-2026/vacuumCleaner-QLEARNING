@@ -205,13 +205,16 @@ def main():
         messed = env.get_wrapper_attr('_total_messed')
         travel = env.get_wrapper_attr('_total_travel')
         reward = round(env.get_wrapper_attr('_episode_reward'), 2)
-        rewards[eps] = reward
         cleanings[eps] = cleaned
         travels[eps] = travel
         if (rooms == clean):
             print("[info] mission accomplished! (all the rooms are clean)")
+            # NOTE: world.py already adds 'all_clean' bonus when terminated=True.
+            # We do NOT add R_DONE here again to avoid double-counting.
+            # The episode reward already reflects the shaped training signal.
         else:
             print("[info] mission failed! (dirty rooms left)")
+        rewards[eps] = reward
         # prnt stats to console
         print("[info] number of clean rooms (at the end): {}/{}".format(clean,rooms))
         print("[info] cleaned: {}, messed: {}".format(cleaned, messed))

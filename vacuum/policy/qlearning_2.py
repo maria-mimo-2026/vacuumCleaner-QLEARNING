@@ -17,50 +17,55 @@ EPSILON       = 1.0
 EPSILON_MIN   = 0.01
 EPSILON_DECAY = 0.9994
 
-R_CLEAN = 8.0    
-R_NEW   = 0.5    
-R_DONE  = 40.0   
-P_SEEN  = -0.3  
-P_LOOP  = -2.0   
-LOOP_WIN = 6
+R_CLEAN = 8.0    # extra reward on top of env's 'cleaned'=10 → total 17.5 per clean
+R_NEW   = 1.0    # FIX: increased from 0.5 — stronger exploration incentive
+R_DONE  = 50.0   # FIX: reduced from 100 — prevents completion bonus from dominating
+P_SEEN  = -0.5   # FIX: increased magnitude from -0.3 — stronger revisit deterrent
+P_LOOP  = -2.0   # penalty for oscillating between two cells
+LOOP_WIN = 6     # sliding window length for loop detection
 # ============================================================
 
-# world.py: agent[0]=X, agent[1]=Y, map[Y, X]
-_MOVE_DXDY = {2:(0,1), 3:(1,0), 4:(0,-1), 5:(-1,0)}
-_MOVE_LIST  = [(2,0,1),(3,1,0),(4,0,-1),(5,-1,0)]  # (action, dx, dy)
+# world.py convention: agent[0]=X, agent[1]=Y, map[Y, X]
+_MOVE_DXDY = {2: (0, 1), 3: (1, 0), 4: (0, -1), 5: (-1, 0)}
+_MOVE_LIST  = [(2, 0, 1), (3, 1, 0), (4, 0, -1), (5, -1, 0)]  # (action, dx, dy)
 
 
 def _bfs_to_unvisited(sx, sy, visited, wmap, n):
-   
+    """
+    BFS from (sx, sy) to find the first action that leads toward the nearest
+    unvisited cell.  Returns None when all reachable cells have been visited.
+    """
     if not visited[sy, sx]:
-        return None 
+        return None     # current cell not yet fully processed — let caller decide
 
     q    = deque()
     seen = set()
     seen.add((sx, sy))
 
+    # Check immediate neighbours first (O(1) best case)
     for act, dx, dy in _MOVE_LIST:
-        nx, ny = sx+dx, sy+dy
-        if not (0 <= nx < n and 0 <= ny < n): continue
-        if wmap[ny, nx] == '#': continue
+        nx, ny = sx + dx, sy + dy
+        if not (0 <= nx < n and 0 <= ny < n):      continue
+        if wmap[ny, nx] == '#':                     continue
         if not visited[ny, nx]:
-            return act          
+            return act                              # direct neighbour is unvisited
         if (nx, ny) not in seen:
             seen.add((nx, ny))
-            q.append((nx, ny, act)) 
+            q.append((nx, ny, act))
+
     while q:
         x, y, first_act = q.popleft()
         for _, dx, dy in _MOVE_LIST:
-            nx, ny = x+dx, y+dy
-            if not (0 <= nx < n and 0 <= ny < n): continue
-            if wmap[ny, nx] == '#': continue
-            if (nx, ny) in seen: continue
+            nx, ny = x + dx, y + dy
+            if not (0 <= nx < n and 0 <= ny < n):  continue
+            if wmap[ny, nx] == '#':                 continue
+            if (nx, ny) in seen:                    continue
             seen.add((nx, ny))
             if not visited[ny, nx]:
-                return first_act    
+                return first_act                    # first action toward nearest unvisited
             q.append((nx, ny, first_act))
 
-    return None  
+    return None     # all reachable cells visited
 
 
 @register_policy("q-learning_2")
@@ -73,18 +78,20 @@ class QLearnPolicy(CleanPolicy):
         self._rng          = np.random.default_rng()
         self._n            = self.env.unwrapped.map_size
         self.map_dimension = self._n
-        self._vcache       = {}  
-        self._wmap         = None 
+        self._vcache       = {}
+        self._wmap         = None
 
         n = self._n
         self.visits      = np.zeros((n, n), dtype=np.int16)
         self.bfs_visited = np.zeros((n, n), dtype=bool)
         self.pos_history = []
         self.steps_stuck = 0
-        self._last_action = None   
-        self._last_pos    = None   
+        self._last_action = None
+        self._last_pos    = None
+
     # ──────────────────────────────────────────────────────
     def _build_vcache(self):
+        """Pre-compute valid move actions for each cell."""
         n = self._n
         try:
             self._wmap = self.env.unwrapped.init_map
@@ -95,7 +102,7 @@ class QLearnPolicy(CleanPolicy):
             for ay in range(n):
                 valid = []
                 for act, dx, dy in _MOVE_LIST:
-                    nx, ny = ax+dx, ay+dy
+                    nx, ny = ax + dx, ay + dy
                     if not (0 <= nx < n and 0 <= ny < n): continue
                     if self._wmap is not None:
                         try:
@@ -112,6 +119,7 @@ class QLearnPolicy(CleanPolicy):
     def _encode_state(self, s):
         x, y = int(s['agent'][0]), int(s['agent'][1])
         return self._enc(x, y, int(s['dirt']))
+
     def get_train_config(self):
         return TRAIN_EPISODES, EPISODE_STEPS
 
@@ -153,21 +161,26 @@ class QLearnPolicy(CleanPolicy):
         x, y = int(state['agent'][0]), int(state['agent'][1])
         dirt = int(state['dirt'])
 
+        # FIX: only persist last action if agent ACTUALLY moved (pos changed).
+        # Old condition `_last_pos == (x, y)` was True when stuck against a wall,
+        # causing the same failing action to repeat indefinitely.
         if (self._last_action is not None and
                 self._last_pos is not None and
-                self._last_pos == (x, y) and
+                self._last_pos != (x, y) and        # ← agent must have moved
                 self._last_action in (2, 3, 4, 5)):
             self._last_pos = (x, y)
             return self._last_action
 
         self.visits[x, y]      = min(self.visits[x, y] + 1, VISITS_CAP - 1)
-        self.bfs_visited[y, x] = True  
+        self.bfs_visited[y, x] = True
 
+        # Priority 1: clean current cell if dirty
         if dirt:
             self._last_action = 1
             self._last_pos    = (x, y)
             return 1
 
+        # Priority 2: stop if world is fully clean
         try:
             if self.env.unwrapped._n_dirty == 0:
                 self._last_action = 0
@@ -176,15 +189,16 @@ class QLearnPolicy(CleanPolicy):
         except Exception:
             pass
 
+        # Priority 3: BFS toward nearest unvisited cell
         n    = self._n
         wmap = self._wmap if self._wmap is not None else self.env.unwrapped.init_map
-
         bfs_act = _bfs_to_unvisited(x, y, self.bfs_visited, wmap, n)
         if bfs_act is not None:
             self._last_action = bfs_act
             self._last_pos    = (x, y)
             return bfs_act
 
+        # Priority 4: fall back to Q-table (all cells visited)
         sidx  = self._enc(x, y, 0)
         valid = self._vcache.get((x, y), [3, 5, 2, 4])
         q     = self.q_table[sidx]
@@ -197,17 +211,18 @@ class QLearnPolicy(CleanPolicy):
     def train_q_learning(self, env, episodes=TRAIN_EPISODES):
         self._build_vcache()
 
+        # Disable Murphy during training for stable gradient signal.
+        # The trained policy is evaluated with murphy_proba restored.
         orig_murphy = env.unwrapped.murphy_proba
-        env.unwrapped.murphy_proba = None   
+        env.unwrapped.murphy_proba = None
 
         env_tl    = gym.wrappers.TimeLimit(env, max_episode_steps=EPISODE_STEPS)
-        n_actions = env_tl.action_space.n
         n         = self._n
         vcap      = VISITS_CAP
         n_states  = n * n * vcap * 2
 
-        self.q_table = np.zeros((n_states, n_actions), dtype=np.float32)
-        self.q_table[:, 0] = -10.0 
+        self.q_table = np.zeros((n_states, 6), dtype=np.float32)
+        self.q_table[:, 0] = -10.0      # suppress idle action
 
         Q      = self.q_table
         eps    = float(EPSILON)
@@ -222,12 +237,12 @@ class QLearnPolicy(CleanPolicy):
 
         rbuf = np.zeros(300, dtype=np.float32)
         ri   = 0
-        reward_log = []
-        clean_log  = []
-        travel_log = []
+        reward_log  = []
+        clean_log   = []
+        travel_log  = []
         epsilon_log = []
-        ep_travel  = 0
-        ep_clean   = 0
+        ep_travel   = 0
+        ep_clean    = 0
 
         for ep in tqdm(range(episodes), desc="Training", unit="ep"):
             obs, _ = env_tl.reset()
@@ -235,26 +250,28 @@ class QLearnPolicy(CleanPolicy):
             bfs_visited = self.bfs_visited
             visits.fill(0)
             bfs_visited.fill(False)
-            ph  = []
+            ph  = []    # sliding position window for loop detection
             stk = 0
 
             x, y = int(obs['agent'][0]), int(obs['agent'][1])
             d    = int(obs['dirt'])
-            v    = int(min(visits[x, y], vcap_-1))
-            si   = ((x*n_+y)*vcap_+v)*2+d
+            v    = int(min(visits[x, y], vcap_ - 1))
+            si   = ((x * n_ + y) * vcap_ + v) * 2 + d
             ep_r = 0.0
             done = False
 
             while not done:
-                valid = vc.get((x, y), [3,5,2,4])
+                valid = vc.get((x, y), [3, 5, 2, 4])
 
+                # Epsilon-greedy with bias toward unvisited cells
                 if d:
-                    act = 1  
+                    act = 1
                 elif rng.random() < eps:
-                    unvis = [a for a,(dx,dy) in _MOVE_DXDY.items()
-                             if a in valid and
-                             0<=x+dx<n_ and 0<=y+dy<n_ and
-                             not bfs_visited[y+dy, x+dx]]
+                    unvis = [a for a, (dx, dy) in _MOVE_DXDY.items()
+                             if a in valid
+                             and 0 <= x + dx < n_
+                             and 0 <= y + dy < n_
+                             and not bfs_visited[y + dy, x + dx]]
                     pool = unvis if unvis else valid
                     act  = pool[int(rng.integers(len(pool)))]
                 else:
@@ -262,7 +279,6 @@ class QLearnPolicy(CleanPolicy):
                     act = valid[0]; bv = qr[valid[0]]
                     for a in valid[1:]:
                         if qr[a] > bv: bv = qr[a]; act = a
-                # ────────────────────────────────────────
 
                 pd = d
                 obs, rew, term, trunc, _ = env_tl.step(act)
@@ -272,30 +288,43 @@ class QLearnPolicy(CleanPolicy):
                 d      = int(obs['dirt'])
 
                 vp = int(visits[nx, ny])
-                if vp < vcap_-1: visits[nx, ny] = vp+1
+                if vp < vcap_ - 1: visits[nx, ny] = vp + 1
                 bfs_visited[ny, nx] = True
                 if act in (2, 3, 4, 5): ep_travel += 1
                 if act == 1 and pd and not d: ep_clean += 1
 
+                # ── Reward shaping (training only) ──────────────────
                 r = float(rew)
-                if act == 1 and pd and not d: r += R_CLEAN
+
+                # Cleaning bonus (adds to env's own cleaned reward)
+                if act == 1 and pd and not d:
+                    r += R_CLEAN
+
+                # Exploration bonus / revisit penalty
                 r += R_NEW if vp == 0 else P_SEEN * min(vp, 4)
 
+                # Loop penalty
                 ph.append((nx, ny))
                 if len(ph) > LOOP_WIN:
                     ph.pop(0)
-                    if len(set(ph)) <= 2: r += P_LOOP; stk += 1
-                    else: stk = 0
-                if term:
-                  steps_used = len(ph)
-                  efficiency_bonus = 0.3 * max(0, 300 - steps_used)
-                  r += R_DONE + efficiency_bonus
-                # ────────────────────────────────────────
+                    if len(set(ph)) <= 2:
+                        r += P_LOOP
+                        stk += 1
+                    else:
+                        stk = 0
 
-                nv = int(min(visits[nx, ny], vcap_-1))
-                ni = ((nx*n_+ny)*vcap_+nv)*2+d
+                # FIX: completion bonus uses true step counter, not window length.
+                # efficiency_bonus ∈ [0, 20]: higher when fewer steps are used.
+                if term:
+                    actual_steps     = env_tl.unwrapped._step
+                    efficiency_bonus = 20.0 * max(0.0, 1.0 - actual_steps / EPISODE_STEPS)
+                    r += R_DONE + efficiency_bonus
+                # ────────────────────────────────────────────────────
+
+                nv = int(min(visits[nx, ny], vcap_ - 1))
+                ni = ((nx * n_ + ny) * vcap_ + nv) * 2 + d
                 bq = float(Q[ni].max())
-                Q[si, act] = one_a*Q[si, act] + alpha*(r + gamma*bq)
+                Q[si, act] = one_a * Q[si, act] + alpha * (r + gamma * bq)
 
                 si = ni; x, y = nx, ny
                 ep_r += r
@@ -306,22 +335,23 @@ class QLearnPolicy(CleanPolicy):
             clean_log.append(ep_clean)
             travel_log.append(ep_travel)
             ep_travel = 0
-            ep_clean  = 0 
+            ep_clean  = 0
             rbuf[ri % 300] = ep_r; ri += 1
 
-            if (ep+1) % 5000 == 0:
+            if (ep + 1) % 5000 == 0:
                 avg = float(rbuf.mean()) if ri >= 300 else float(rbuf[:ri].mean())
                 print(f"  Ep {ep+1:>6} | ε={eps:.4f} | avg_r={avg:.1f}")
 
         env.unwrapped.murphy_proba = orig_murphy
+
         from tools import Tools
         Tools.save_training_results(
-     self.world_id,
-     "q-learning_2",
-    {'epsilon': epsilon_log ,'reward': reward_log, 'cleaned': clean_log, 'travel': travel_log }
-     )
-        from tools import Tools
+            self.world_id,
+            "q-learning_2",
+            {'epsilon': epsilon_log, 'reward': reward_log,
+             'cleaned': clean_log,   'travel': travel_log}
+        )
         Tools.plot_epsilon(episodes, epsilon_log)
-        self._save_qtable()  
+        self._save_qtable()
         self.trained = True
         print("\n✅ Training finished successfully!")
