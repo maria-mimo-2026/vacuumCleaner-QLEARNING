@@ -135,12 +135,7 @@ def print_table(all_results):
         print(f"  {'':22} {'QL2':<18}"
               f" {s2['avg_reward']:>8.1f} {s2['avg_travel']:>8.1f}"
               f" {s2['avg_cleaned']:>9.1f} {s2['success_rate']:>7.0f}%")
-        d_travel  = round(s2['avg_travel']  - s1['avg_travel'],  1)
-        d_success = round(s2['success_rate'] - s1['success_rate'], 0)
-        d_reward  = round(s2['avg_reward']  - s1['avg_reward'],  1)
-        sign_t = "+" if d_travel  >= 0 else ""
-        sign_s = "+" if d_success >= 0 else ""
-        sign_r = "+" if d_reward  >= 0 else ""
+       
         print("-"*78)
     print("="*78)
     print(f"  * {N_RUNS} test runs | murphy_proba=0.11 | dirt_comeback=False")

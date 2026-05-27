@@ -162,14 +162,6 @@ class QLearnPolicy(CleanPolicy):
             self._last_pos    = (x, y)
             return 1
 
-        try:
-            if self.env.unwrapped._n_dirty == 0:
-                self._last_action = 0
-                self._last_pos    = (x, y)
-                return 0
-        except Exception:
-            pass
-
         n    = self._n
         wmap = self._wmap if self._wmap is not None else self.env.unwrapped.init_map
 
@@ -190,9 +182,6 @@ class QLearnPolicy(CleanPolicy):
     # ──────────────────────────────────────────────────────
     def train_q_learning(self, env, episodes=TRAIN_EPISODES):
         self._build_vcache()
-
-        orig_murphy = env.unwrapped.murphy_proba
-        env.unwrapped.murphy_proba = None   
 
         env_tl    = gym.wrappers.TimeLimit(env, max_episode_steps=EPISODE_STEPS)
         n_actions = env_tl.action_space.n
@@ -309,7 +298,6 @@ class QLearnPolicy(CleanPolicy):
                 avg = float(rbuf.mean()) if ri >= 300 else float(rbuf[:ri].mean())
                 print(f"  Ep {ep+1:>6} | ε={eps:.4f} | avg_r={avg:.1f}")
 
-        env.unwrapped.murphy_proba = orig_murphy
         from tools import Tools
         Tools.save_training_results(
      self.world_id,
@@ -317,7 +305,6 @@ class QLearnPolicy(CleanPolicy):
     {'epsilon': epsilon_log ,'reward': reward_log, 'cleaned': clean_log, 'travel': travel_log }
      )
         from tools import Tools
-        Tools.plot_epsilon(episodes, epsilon_log)
         self._save_qtable()  
         self.trained = True
         print("\n✅ Training finished successfully!")
