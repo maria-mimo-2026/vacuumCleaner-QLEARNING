@@ -153,12 +153,6 @@ class QLearnPolicy(CleanPolicy):
         x, y = int(state['agent'][0]), int(state['agent'][1])
         dirt = int(state['dirt'])
 
-        if (self._last_action is not None and
-                self._last_pos is not None and
-                self._last_pos == (x, y) and
-                self._last_action in (2, 3, 4, 5)):
-            self._last_pos = (x, y)
-            return self._last_action
 
         self.visits[x, y]      = min(self.visits[x, y] + 1, VISITS_CAP - 1)
         self.bfs_visited[y, x] = True  
@@ -243,6 +237,7 @@ class QLearnPolicy(CleanPolicy):
             v    = int(min(visits[x, y], vcap_-1))
             si   = ((x*n_+y)*vcap_+v)*2+d
             ep_r = 0.0
+            ep_step = 0
             done = False
 
             while not done:
@@ -267,6 +262,7 @@ class QLearnPolicy(CleanPolicy):
                 pd = d
                 obs, rew, term, trunc, _ = env_tl.step(act)
                 done = term or trunc
+                ep_step += 1
 
                 nx, ny = int(obs['agent'][0]), int(obs['agent'][1])
                 d      = int(obs['dirt'])
@@ -287,8 +283,8 @@ class QLearnPolicy(CleanPolicy):
                     if len(set(ph)) <= 2: r += P_LOOP; stk += 1
                     else: stk = 0
                 if term:
-                  steps_used = len(ph)
-                  efficiency_bonus = 0.3 * max(0, 300 - steps_used)
+                  
+                  efficiency_bonus = 0.1 * max(0, 300 - ep_step)
                   r += R_DONE + efficiency_bonus
                 # ────────────────────────────────────────
 

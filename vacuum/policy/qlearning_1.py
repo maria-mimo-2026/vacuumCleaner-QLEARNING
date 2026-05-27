@@ -14,7 +14,7 @@ from vacuum.world import VacuumCleanerWorldEnv
 from vacuum.maps import Map
 from tools import Tools as tl
 import gymnasium as gym
-from gym.wrappers import TimeLimit
+from gymnasium.wrappers import TimeLimit
 import os
 import pickle
 import numpy as np

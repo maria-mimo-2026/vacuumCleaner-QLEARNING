@@ -1,9 +1,7 @@
-# required python packages
-gym
-numpy
-matplotlib
-pygame
-seaborn
-pickle
-tqdm
-pprint
+gymnasium>=0.29
+numpy>=1.24
+matplotlib>=3.7
+pygame>=2.5
+seaborn>=0.12
+tqdm>=4.65
+pandas>=2.0
