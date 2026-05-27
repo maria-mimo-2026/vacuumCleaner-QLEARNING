@@ -47,8 +47,7 @@ def run_experiments(env, policy, n=N_RUNS):
     results = []
     print(f"  [{policy.policy_id}] running {n} experiments...")
 
-    seed = 0
-    for _ in range(n):
+    for seed in range(n):
         obs, info = env.reset(seed=seed)
         policy.reset(seed=seed) 
         done = False
@@ -62,8 +61,10 @@ def run_experiments(env, policy, n=N_RUNS):
         nbr_rooms  = env.unwrapped.nbr_rooms
         success    = (dirty_left == 0)
 
+        base_reward = env.unwrapped._episode_reward
+        
         results.append({
-            'reward':  round(env.unwrapped._episode_reward, 2),
+            'reward':  round(base_reward, 2),
             'travel':  env.unwrapped._total_travel,
             'cleaned': env.unwrapped._total_cleaned,
             'success': success,
@@ -80,7 +81,7 @@ def run_experiments(env, policy, n=N_RUNS):
     avg_cleaned  = round(np.mean([r['cleaned'] for r in results]), 1)
     success_rate = sum(1 for r in results if r['success']) / n * 100
 
-    print(f"  → avg: reward={avg_reward}  travel={avg_travel}"
+    print(f"  -> avg: reward={avg_reward}  travel={avg_travel}"
           f"  cleaned={avg_cleaned}  success={success_rate:.0f}%")
 
     return {

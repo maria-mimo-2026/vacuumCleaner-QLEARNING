@@ -86,6 +86,7 @@ def main():
     #env = gym.make('VacuumCleanerWorld-v0', grid=wmap, render_mode='console')
     # create the gym env.
     env = gym.make('VacuumCleanerWorld-v0', grid=wmap)
+    env.unwrapped.dense_rewards = False
     # seed the env, 
     # uncomment the next line for reproducible results and comparison
     env.reset(seed=SEED)
@@ -205,13 +206,14 @@ def main():
         messed = env.get_wrapper_attr('_total_messed')
         travel = env.get_wrapper_attr('_total_travel')
         reward = round(env.get_wrapper_attr('_episode_reward'), 2)
-        rewards[eps] = reward
         cleanings[eps] = cleaned
         travels[eps] = travel
         if (rooms == clean):
             print("[info] mission accomplished! (all the rooms are clean)")
+            pass
         else:
             print("[info] mission failed! (dirty rooms left)")
+        rewards[eps] = reward
         # prnt stats to console
         print("[info] number of clean rooms (at the end): {}/{}".format(clean,rooms))
         print("[info] cleaned: {}, messed: {}".format(cleaned, messed))

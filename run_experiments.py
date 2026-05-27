@@ -8,8 +8,7 @@ def run_10_experiments(env, policy, n_experiments=10):
     results = []
     print(f"\n[info] Running {n_experiments} experiments - policy: {policy.policy_id}")
     print("-" * 55)
-    seed = 0
-    for _ in range(n_experiments):
+    for seed in range(n_experiments):
         obs, info = env.reset(seed=seed)
         policy.reset(seed=seed) 
         done = False

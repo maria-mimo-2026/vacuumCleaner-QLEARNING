@@ -80,6 +80,8 @@ class VacuumCleanerWorldEnv(gym.Env):
         logging.basicConfig(filename=LOG_FILENAME, level=logging.DEBUG)
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.WARNING)
+        self.reward_mode = "default"
+        self.dense_rewards = True
 
     # ──────────────────────────────────────────────────────────────
     # setters
@@ -105,13 +107,15 @@ class VacuumCleanerWorldEnv(gym.Env):
     # ──────────────────────────────────────────────────────────────
     def get_rewards(self):
         return {
-            'clean':   0.5,    
-            'cleaned': 10.,
-            'dirty':   -0.5,   
-            'suck':    -.5,
-            'move':    -.1,    
-            'throw':   -5.,
-            'none':    0.,
+            'clean':     0.1,    
+            'cleaned':   10.,
+            'dirty':     -2.0,   
+            'suck':      -0.5,
+            'move':      -0.2,    
+            'throw':     -5.0,
+            'none':      0.0,
+            'all_clean': 20.0,   # bonus when all rooms are cleaned
+              
         }
 
     def get_actions(self):
@@ -247,8 +251,11 @@ class VacuumCleanerWorldEnv(gym.Env):
                 self._step += 1
                 truncated  = (self._step == self.episode_max_steps)
                 terminated = (not self.dirt_comeback and self._n_dirty == 0)
-                reward += self._n_clean * self.get_rewards()["clean"]                         + self._n_dirty * self.get_rewards()["dirty"]
                 self._episode_reward = round(self._episode_reward + reward, 2)
+                if self.dense_rewards:
+                 if terminated or truncated:
+                   reward += self._n_clean * self.get_rewards()['clean'] \
+                   + self._n_dirty * self.get_rewards()['dirty']
                 observation = self._get_obs()
                 info        = self._get_info()
                 return observation, reward, terminated, truncated, info
@@ -271,8 +278,16 @@ class VacuumCleanerWorldEnv(gym.Env):
         truncated  = (self._step == self.episode_max_steps)
         terminated = (not self.dirt_comeback and self._n_dirty == 0)
 
-        reward += self._n_clean * self.get_rewards()['clean'] \
-                + self._n_dirty * self.get_rewards()['dirty']
+        # Add terminal bonuses only once (not every step) to avoid inflating
+        # rewards for agents that simply move more steps
+        if terminated or truncated:
+            reward += self._n_clean * self.get_rewards()['clean'] \
+                    + self._n_dirty * self.get_rewards()['dirty']
+
+        # Bonus when all rooms are cleaned (applies during both training and testing)
+        if terminated:
+            reward += self.get_rewards().get('all_clean', 40.0)
+
         self._episode_reward = round(self._episode_reward + reward, 2)
 
         if self.dirt_comeback:

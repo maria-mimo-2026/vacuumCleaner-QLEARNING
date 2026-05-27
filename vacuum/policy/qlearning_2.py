@@ -19,7 +19,7 @@ EPSILON_DECAY = 0.9994
 
 R_CLEAN = 8.0    
 R_NEW   = 0.5    
-R_DONE  = 40.0   
+R_DONE  = 10.0  
 P_SEEN  = -0.3  
 P_LOOP  = -2.0   
 LOOP_WIN = 6

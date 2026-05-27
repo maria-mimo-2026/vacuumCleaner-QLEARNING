@@ -9,7 +9,7 @@ from vacuum.policy.helpers import make_policy
 N_RUNS    = 10
 MAX_STEPS = 300
 
-POLICY_ID_QL1 = "q-learning_1"
+POLICY_ID_QL1 = "oqlearning"
 POLICY_ID_QL2 = "q-learning_2"
 
 MAPS = [
@@ -46,8 +46,7 @@ def make_env(map_id):
 def run_tests(env, policy, label, n=N_RUNS):
     results = []
     print(f"  [{label}] testing {n} seeds...")
-    seed = 0
-    for _ in range(n):
+    for seed in range(n):
         obs, info = env.reset(seed=seed)
         policy.reset(seed=seed) 
         done = False
@@ -57,11 +56,14 @@ def run_tests(env, policy, label, n=N_RUNS):
             done = terminated or truncated
         nbr_rooms = env.unwrapped.nbr_rooms
         dirty_left = info['dirty_spots']
+        success = (dirty_left == 0)
+        base_reward = env.unwrapped._episode_reward
+        
         results.append({
-            'reward':  round(env.unwrapped._episode_reward, 2),
+            'reward':  round(base_reward, 2),
             'travel':  env.unwrapped._total_travel,
             'cleaned': env.unwrapped._total_cleaned,
-            'success': dirty_left == 0,
+            'success': success,
         })
         status = "OK  " if results[-1]['success'] else "FAIL"
         print(f"    [{status}] seed={seed}"
@@ -86,7 +88,7 @@ def compare_one_map(map_id):
 
     results = []
     for policy_id, label in [
-        (POLICY_ID_QL1, "QL1 "),
+        (POLICY_ID_QL1, "OQL "),
         (POLICY_ID_QL2, "QL2 "),
     ]:
         env = make_env(map_id)
@@ -100,16 +102,13 @@ def compare_one_map(map_id):
 
         policy.reset(seed=0)
 
-        if not policy.load_qtable():
-            if policy_id == POLICY_ID_QL1:
-                print(f"  [!] Q-table ({label}) not found for {map_id}")
-                print(f"      Train first: python main.py [map_n] 3 -e 1 300 -cl")
-            else:
-                print(f"  [!] Q-table ({label}) not found for {map_id}")
+        if policy_id == POLICY_ID_QL2:
+            if not policy.load_qtable():
+                print(f"  [!] Q-table (QL2) not found for {map_id}")
                 print(f"      Train first: python main.py [map_n] 4 -e 1 300 -cl")
-            env.close()
-            results.append(None)
-            continue
+                env.close()
+                results.append(None)
+                continue
 
         stats = run_tests(env, policy, label)
         env.close()
@@ -118,7 +117,6 @@ def compare_one_map(map_id):
     if results[0] is None or results[1] is None:
         return None
     return results[0], results[1]
-
 
 def print_table(all_results):
     print("\n\n" + "="*78)
@@ -131,7 +129,7 @@ def print_table(all_results):
             print("-"*78)
             continue
         s1, s2 = stats
-        print(f"  {map_id:<22} {'QL1':<18}"
+        print(f"  {map_id:<22} {'OQL':<18}"
               f" {s1['avg_reward']:>8.1f} {s1['avg_travel']:>8.1f}"
               f" {s1['avg_cleaned']:>9.1f} {s1['success_rate']:>7.0f}%")
         print(f"  {'':22} {'QL2':<18}"
@@ -146,7 +144,8 @@ def print_table(all_results):
         print("-"*78)
     print("="*78)
     print(f"  * {N_RUNS} test runs | murphy_proba=0.11 | dirt_comeback=False")
-    print(f"  * QL1 = qlearning_1.py| QL2 = qlearning_2.py")
+    print(f"  * OQL = oqlearning.py | QL2 = qlearning_2.py")
+
     print("="*78)
 
 
@@ -160,7 +159,8 @@ if __name__ == "__main__":
     else:
         maps_to_run = MAPS
 
-    print(f"Comparing QL1 vs QL2  on {len(maps_to_run)} maps...")
+    print(f"  * OQL = oqlearning.py | QL2 = qlearning_2.py")
+
     all_results = {}
     for map_id in maps_to_run:
         all_results[map_id] = compare_one_map(map_id)

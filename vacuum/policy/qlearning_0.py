@@ -12,6 +12,7 @@ date: May 2025
 from vacuum.policy.base import CleanPolicy
 from vacuum.world import VacuumCleanerWorldEnv
 from vacuum.maps import Map
+from constants import VISITS_CAP
 #from tools import Tools as tl
 from tools import Tools
 import gymnasium as gym
@@ -41,7 +42,7 @@ EPSILON_DECAY_AMOUNT = 0.01  # or another suitable small value (for linear decay
 class QLearnPolicy(CleanPolicy):
 
     def __init__(self, world_id, env):
-        super().__init__("q-learning", world_id, env)
+        super().__init__("q-learning_0", world_id, env)
         self.trained = False
         self.q_table = None
         self._rng = None    # random number generator
