@@ -34,7 +34,7 @@ class Map:
 	"vacuum-7rooms-v0", 
 	"vacuum-8rooms-v0", "vacuum-8rooms-v1",
 	"vacuum-9rooms-v0", 
-	"vacuum-12rooms-v0","vacuum-5x5-v0","vacuum-6x6-v0"]
+	"vacuum-12rooms-v0","vacuum-13rooms-v0","vacuum-18rooms-v0"]
 
 	world_maps = None           # list of pre-defined maps
 	# currently selected world (to share with other '.py')
@@ -290,7 +290,7 @@ class Map:
 			['.', '.', '.', '#']
 		]
 
-		# vacuum-5x5-v0
+		# 13 rooms v0 , 5 x 5 grid
 		world_map13_0 = [		
 			['.', '.', '#','.','.'],
 			['#', '.', '#', '.','#'],
@@ -301,7 +301,7 @@ class Map:
 		]
 
         
-		# vacuum-6x6-v0
+		# 18 rooms v0 , 6 x 6 grid
 		world_map18_0 = [		
 			['.', '.', '#','.','.','#'],
 			['#', '.', '#', '.','#','#'],

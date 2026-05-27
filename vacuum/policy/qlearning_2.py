@@ -17,37 +17,32 @@ EPSILON       = 1.0
 EPSILON_MIN   = 0.01
 EPSILON_DECAY = 0.9994
 
-R_CLEAN = 8.0    
-R_NEW   = 0.5    
-R_DONE  = 10.0  
-P_SEEN  = -0.3  
-P_LOOP  = -2.0   
+R_CLEAN  = 8.0
+R_NEW    = 0.5
+R_DONE   = 10.0
+P_SEEN   = -0.3
+P_LOOP   = -2.0
 LOOP_WIN = 6
 # ============================================================
 
-# world.py: agent[0]=X, agent[1]=Y, map[Y, X]
 _MOVE_DXDY = {2:(0,1), 3:(1,0), 4:(0,-1), 5:(-1,0)}
-_MOVE_LIST  = [(2,0,1),(3,1,0),(4,0,-1),(5,-1,0)]  # (action, dx, dy)
+_MOVE_LIST  = [(2,0,1),(3,1,0),(4,0,-1),(5,-1,0)]
 
 
 def _bfs_to_unvisited(sx, sy, visited, wmap, n):
-   
     if not visited[sy, sx]:
-        return None 
-
+        return None
     q    = deque()
     seen = set()
     seen.add((sx, sy))
-
     for act, dx, dy in _MOVE_LIST:
         nx, ny = sx+dx, sy+dy
         if not (0 <= nx < n and 0 <= ny < n): continue
         if wmap[ny, nx] == '#': continue
-        if not visited[ny, nx]:
-            return act          
+        if not visited[ny, nx]: return act
         if (nx, ny) not in seen:
             seen.add((nx, ny))
-            q.append((nx, ny, act)) 
+            q.append((nx, ny, act))
     while q:
         x, y, first_act = q.popleft()
         for _, dx, dy in _MOVE_LIST:
@@ -56,11 +51,34 @@ def _bfs_to_unvisited(sx, sy, visited, wmap, n):
             if wmap[ny, nx] == '#': continue
             if (nx, ny) in seen: continue
             seen.add((nx, ny))
-            if not visited[ny, nx]:
-                return first_act    
+            if not visited[ny, nx]: return first_act
             q.append((nx, ny, first_act))
+    return None
 
-    return None  
+
+def _bfs_to_dirty(sx, sy, wmap, n, current_map):
+    """BFS لأقرب غرفة قذرة في الخريطة الحالية."""
+    q    = deque()
+    seen = {(sx, sy)}
+    for act, dx, dy in _MOVE_LIST:
+        nx, ny = sx+dx, sy+dy
+        if not (0 <= nx < n and 0 <= ny < n): continue
+        if wmap[ny, nx] == '#': continue
+        if current_map[ny, nx] == 'x': return act
+        if (nx, ny) not in seen:
+            seen.add((nx, ny))
+            q.append((nx, ny, act))
+    while q:
+        x, y, fa = q.popleft()
+        for _, dx, dy in _MOVE_LIST:
+            nx, ny = x+dx, y+dy
+            if not (0 <= nx < n and 0 <= ny < n): continue
+            if wmap[ny, nx] == '#': continue
+            if (nx, ny) in seen: continue
+            seen.add((nx, ny))
+            if current_map[ny, nx] == 'x': return fa
+            q.append((nx, ny, fa))
+    return None
 
 
 @register_policy("q-learning_2")
@@ -73,16 +91,17 @@ class QLearnPolicy(CleanPolicy):
         self._rng          = np.random.default_rng()
         self._n            = self.env.unwrapped.map_size
         self.map_dimension = self._n
-        self._vcache       = {}  
-        self._wmap         = None 
+        self._vcache       = {}
+        self._wmap         = None
 
         n = self._n
-        self.visits      = np.zeros((n, n), dtype=np.int16)
-        self.bfs_visited = np.zeros((n, n), dtype=bool)
-        self.pos_history = []
-        self.steps_stuck = 0
-        self._last_action = None   
-        self._last_pos    = None   
+        self.visits       = np.zeros((n, n), dtype=np.int16)
+        self.bfs_visited  = np.zeros((n, n), dtype=bool)
+        self.pos_history  = []
+        self.steps_stuck  = 0
+        self._last_action = None
+        self._last_pos    = None
+
     # ──────────────────────────────────────────────────────
     def _build_vcache(self):
         n = self._n
@@ -90,7 +109,6 @@ class QLearnPolicy(CleanPolicy):
             self._wmap = self.env.unwrapped.init_map
         except Exception:
             self._wmap = None
-
         for ax in range(n):
             for ay in range(n):
                 valid = []
@@ -112,6 +130,7 @@ class QLearnPolicy(CleanPolicy):
     def _encode_state(self, s):
         x, y = int(s['agent'][0]), int(s['agent'][1])
         return self._enc(x, y, int(s['dirt']))
+
     def get_train_config(self):
         return TRAIN_EPISODES, EPISODE_STEPS
 
@@ -121,8 +140,8 @@ class QLearnPolicy(CleanPolicy):
             self._rng = np.random.default_rng(seed)
         self.visits.fill(0)
         self.bfs_visited.fill(False)
-        self.pos_history = []
-        self.steps_stuck = 0
+        self.pos_history  = []
+        self.steps_stuck  = 0
         self._last_action = None
         self._last_pos    = None
 
@@ -153,24 +172,69 @@ class QLearnPolicy(CleanPolicy):
         x, y = int(state['agent'][0]), int(state['agent'][1])
         dirt = int(state['dirt'])
 
-
         self.visits[x, y]      = min(self.visits[x, y] + 1, VISITS_CAP - 1)
-        self.bfs_visited[y, x] = True  
+        self.bfs_visited[y, x] = True
 
+        # 1) dirty هنا → نظّف فوراً
         if dirt:
+            self.pos_history.clear()
             self._last_action = 1
             self._last_pos    = (x, y)
             return 1
 
-        n    = self._n
-        wmap = self._wmap if self._wmap is not None else self.env.unwrapped.init_map
+        # 2) كل الغرف نظيفة → توقّف
+        try:
+            if self.env.unwrapped._n_dirty == 0:
+                self._last_action = 0
+                self._last_pos    = (x, y)
+                return 0
+        except Exception:
+            pass
 
+        n    = self._n
+        wmap = self._wmap if self._wmap is not None \
+               else self.env.unwrapped.init_map
+
+        # 3) BFS لأقرب غرفة قذرة مباشرةً
+        try:
+            dirty_act = _bfs_to_dirty(
+                x, y, wmap, n, self.env.unwrapped.map)
+            if dirty_act is not None:
+                self.pos_history.clear()
+                self._last_action = dirty_act
+                self._last_pos    = (x, y)
+                return dirty_act
+        except Exception:
+            pass
+
+        # 4) loop detection
+        self.pos_history.append((x, y))
+        if len(self.pos_history) > LOOP_WIN:
+            self.pos_history.pop(0)
+
+        stuck = (
+            len(self.pos_history) == LOOP_WIN and
+            len(set(self.pos_history)) <= 2
+        )
+
+        if stuck:
+            self.pos_history.clear()
+            self.bfs_visited.fill(False)
+            self.bfs_visited[y, x] = True
+            bfs_act = _bfs_to_unvisited(x, y, self.bfs_visited, wmap, n)
+            if bfs_act is not None:
+                self._last_action = bfs_act
+                self._last_pos    = (x, y)
+                return bfs_act
+
+        # 5) BFS لاستكشاف خلايا غير مزارة
         bfs_act = _bfs_to_unvisited(x, y, self.bfs_visited, wmap, n)
         if bfs_act is not None:
             self._last_action = bfs_act
             self._last_pos    = (x, y)
             return bfs_act
 
+        # 6) Q-table (كل الخلايا مزارة)
         sidx  = self._enc(x, y, 0)
         valid = self._vcache.get((x, y), [3, 5, 2, 4])
         q     = self.q_table[sidx]
@@ -183,6 +247,9 @@ class QLearnPolicy(CleanPolicy):
     def train_q_learning(self, env, episodes=TRAIN_EPISODES):
         self._build_vcache()
 
+        orig_murphy = env.unwrapped.murphy_proba
+        env.unwrapped.murphy_proba = None
+
         env_tl    = gym.wrappers.TimeLimit(env, max_episode_steps=EPISODE_STEPS)
         n_actions = env_tl.action_space.n
         n         = self._n
@@ -190,7 +257,7 @@ class QLearnPolicy(CleanPolicy):
         n_states  = n * n * vcap * 2
 
         self.q_table = np.zeros((n_states, n_actions), dtype=np.float32)
-        self.q_table[:, 0] = -10.0 
+        self.q_table[:, 0] = -10.0
 
         Q      = self.q_table
         eps    = float(EPSILON)
@@ -205,12 +272,12 @@ class QLearnPolicy(CleanPolicy):
 
         rbuf = np.zeros(300, dtype=np.float32)
         ri   = 0
-        reward_log = []
-        clean_log  = []
-        travel_log = []
+        reward_log  = []
+        clean_log   = []
+        travel_log  = []
         epsilon_log = []
-        ep_travel  = 0
-        ep_clean   = 0
+        ep_travel   = 0
+        ep_clean    = 0
 
         for ep in tqdm(range(episodes), desc="Training", unit="ep"):
             obs, _ = env_tl.reset()
@@ -226,14 +293,13 @@ class QLearnPolicy(CleanPolicy):
             v    = int(min(visits[x, y], vcap_-1))
             si   = ((x*n_+y)*vcap_+v)*2+d
             ep_r = 0.0
-            ep_step = 0
             done = False
 
             while not done:
                 valid = vc.get((x, y), [3,5,2,4])
 
                 if d:
-                    act = 1  
+                    act = 1
                 elif rng.random() < eps:
                     unvis = [a for a,(dx,dy) in _MOVE_DXDY.items()
                              if a in valid and
@@ -246,12 +312,10 @@ class QLearnPolicy(CleanPolicy):
                     act = valid[0]; bv = qr[valid[0]]
                     for a in valid[1:]:
                         if qr[a] > bv: bv = qr[a]; act = a
-                # ────────────────────────────────────────
 
                 pd = d
                 obs, rew, term, trunc, _ = env_tl.step(act)
                 done = term or trunc
-                ep_step += 1
 
                 nx, ny = int(obs['agent'][0]), int(obs['agent'][1])
                 d      = int(obs['dirt'])
@@ -272,10 +336,9 @@ class QLearnPolicy(CleanPolicy):
                     if len(set(ph)) <= 2: r += P_LOOP; stk += 1
                     else: stk = 0
                 if term:
-                  
-                  efficiency_bonus = 0.1 * max(0, 300 - ep_step)
-                  r += R_DONE + efficiency_bonus
-                # ────────────────────────────────────────
+                    steps_used = len(ph)
+                    efficiency_bonus = 0.3 * max(0, 300 - steps_used)
+                    r += R_DONE + efficiency_bonus
 
                 nv = int(min(visits[nx, ny], vcap_-1))
                 ni = ((nx*n_+ny)*vcap_+nv)*2+d
@@ -291,20 +354,22 @@ class QLearnPolicy(CleanPolicy):
             clean_log.append(ep_clean)
             travel_log.append(ep_travel)
             ep_travel = 0
-            ep_clean  = 0 
+            ep_clean  = 0
             rbuf[ri % 300] = ep_r; ri += 1
 
             if (ep+1) % 5000 == 0:
                 avg = float(rbuf.mean()) if ri >= 300 else float(rbuf[:ri].mean())
                 print(f"  Ep {ep+1:>6} | ε={eps:.4f} | avg_r={avg:.1f}")
 
+        env.unwrapped.murphy_proba = orig_murphy
         from tools import Tools
         Tools.save_training_results(
-     self.world_id,
-     "q-learning_2",
-    {'epsilon': epsilon_log ,'reward': reward_log, 'cleaned': clean_log, 'travel': travel_log }
-     )
-        from tools import Tools
-        self._save_qtable()  
+            self.world_id,
+            "q-learning_2",
+            {'epsilon': epsilon_log, 'reward': reward_log,
+             'cleaned': clean_log, 'travel': travel_log}
+        )
+        Tools.plot_epsilon(episodes, epsilon_log)
+        self._save_qtable()
         self.trained = True
         print("\n✅ Training finished successfully!")

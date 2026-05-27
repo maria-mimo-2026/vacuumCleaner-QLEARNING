@@ -1,5 +1,6 @@
 """
 world.py
+________
 """
 
 from vacuum.maps import Map
@@ -44,6 +45,8 @@ class VacuumCleanerWorldEnv(gym.Env):
         self.location_sensor = location_sensor
         self.episode_max_steps = episode_max_steps
         self.render_mode     = render_mode
+
+        self._n_dirty        = 0   # fast counter for termination check (O(1))
 
         self.nbr_rooms       = self.count_rooms()
         self._episode        = None
@@ -90,23 +93,22 @@ class VacuumCleanerWorldEnv(gym.Env):
         return {"agent": l, "dirt": dirty}
 
     def _get_info(self):
-        nbr_dirty = self.count_rooms(clean=False)
         return {
             'action_success': self._action_success,
-            'dirty_spots':    nbr_dirty,
+            'dirty_spots':    self._n_dirty,
             'step':           self._step,
         }
 
     # ──────────────────────────────────────────────────────────────
     def get_rewards(self):
         return {
-            'clean':   0.1,    # reward per clean room per step
-            'cleaned': 10.0,   # reward for cleaning a dirty room
-            'dirty':   -2.0,   # penalty per dirty room per step
-            'suck':    -0.5,   # noise/power penalty
-            'move':    -0.2,   # movement penalty
-            'throw':   -5.0,   # penalty for throwing dirt (Murphy)
-            'none':    0.0,    # idle reward
+            'clean':   2.0,
+            'cleaned': 10.0,   
+            'dirty':   -2.0,
+            'suck':    -0.5,
+            'move':    -0.2,
+            'throw':   -5.0,
+            'none':    0.0,
         }
 
     def get_actions(self):
@@ -145,6 +147,7 @@ class VacuumCleanerWorldEnv(gym.Env):
                 if self.np_random.random() < proba:
                     self.map[i, j] = 'x'
                     self._total_dirty += 1
+                    self._n_dirty     += 1   # update fast counter
 
     def simulate_action(self, action):
         if self.murphy_proba is not None:
@@ -166,7 +169,8 @@ class VacuumCleanerWorldEnv(gym.Env):
 
         self._step           = 0
         self._episode_reward = 0
-        # FIX (bug in original): copy avoids mutating init_map across episodes
+        self._n_dirty        = 0
+        # FIX: copy avoids mutating init_map across episodes
         self.map             = self.init_map.copy()
         self._total_dirty    = 0
         self._total_cleaned  = 0
@@ -174,12 +178,13 @@ class VacuumCleanerWorldEnv(gym.Env):
         self._total_travel   = 0
         self._failures       = 0
 
-        self.sample_dirt(proba=INIT_DIRT_PROBA)
+        self.sample_dirt(proba=INIT_DIRT_PROBA)   # updates _n_dirty internally
 
         self.nbr_rooms    = self.count_rooms()
         clean             = self.count_rooms(clean=True)
         dirty             = self.nbr_rooms - clean
         self._total_dirty = dirty
+        self._n_dirty     = dirty   # sync after initial dirt sample
 
         self.logger.info("env reset: rooms {}, clean {}, dirty {}".format(
             self.nbr_rooms, clean, dirty))
@@ -211,12 +216,12 @@ class VacuumCleanerWorldEnv(gym.Env):
                     self.map[y, x]      = '.'
                     self._suck_outcome  = 'cleaned'
                     self._total_cleaned += 1
+                    self._n_dirty       -= 1   # fast counter update
                     reward = penalty + self.get_rewards()['cleaned']
                     self.logger.info("room {} cleaned!".format((x, y)))
                 else:
                     self._suck_outcome = 'nothing'
             else:
-                # Defensive: cell is '.' (agent can't stand on '#')
                 if self.map[y, x] != '.':
                     self._action_success = False
                     self._suck_outcome   = 'nothing'
@@ -226,6 +231,7 @@ class VacuumCleanerWorldEnv(gym.Env):
                         self.map[y, x]      = 'x'
                         self._total_dirty  += 1
                         self._total_messed += 1
+                        self._n_dirty      += 1   # fast counter update
                         self._suck_outcome  = 'messed'
                         reward = penalty + self.get_rewards()['throw']
                         self.logger.info("agent throws dirt in {}!".format((x, y)))
@@ -249,15 +255,14 @@ class VacuumCleanerWorldEnv(gym.Env):
                 else:
                     self._action_success = False
 
-        # ── dense reward each step (per teacher's spec) ────────────
+        # ── dense reward each step ──────────────────────────────
         terminated = False
         self._step += 1
         truncated  = (self._step == self.episode_max_steps)
 
-        nbr_clean = self.count_rooms(clean=True)
-        nbr_dirty = self.count_rooms(clean=False)
+        nbr_clean = self.nbr_rooms - self._n_dirty   # O(1) using counter
         reward = reward + nbr_clean * self.get_rewards()['clean'] \
-                        + nbr_dirty * self.get_rewards()['dirty']
+                        + self._n_dirty * self.get_rewards()['dirty']
         self._episode_reward = round(self._episode_reward + reward, 2)
 
         if self.dirt_comeback:

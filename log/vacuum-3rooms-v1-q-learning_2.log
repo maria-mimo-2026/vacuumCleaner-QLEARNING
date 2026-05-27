@@ -1,6 +1,6 @@
 INFO:__main__:{'grid': array([['#', '.', '#'],
        ['.', '.', '#'],
-       ['#', '#', '#']], dtype='<U1'), 'dirt_comeback': False, 'dirt_proba': 0.09, 'murphy_proba': 0.11, 'location_sensor': True, 'episode_max_steps': 300, 'render_mode': None}
+       ['#', '#', '#']], dtype='<U1'), 'dirt_comeback': False, 'dirt_proba': 0.09, 'murphy_proba': 0.11, 'location_sensor': True, 'episode_max_steps': 150, 'render_mode': 'human'}
 DEBUG:matplotlib.pyplot:Loaded backend tkagg version 8.6.
 DEBUG:PIL.PngImagePlugin:STREAM b'IHDR' 16 13
 DEBUG:PIL.PngImagePlugin:STREAM b'sBIT' 41 4
@@ -895,4 +895,4 @@ DEBUG:matplotlib.font_manager:findfont: score(FontEntry(fname='C:\\Windows\\Font
 DEBUG:matplotlib.font_manager:findfont: score(FontEntry(fname='C:\\Windows\\Fonts\\palai.ttf', name='Palatino Linotype', style='italic', variant='normal', weight=400, stretch='normal', size='scalable')) = 11.05
 DEBUG:matplotlib.font_manager:findfont: score(FontEntry(fname='C:\\Windows\\Fonts\\corbel.ttf', name='Corbel', style='normal', variant='normal', weight=400, stretch='normal', size='scalable')) = 10.05
 DEBUG:matplotlib.font_manager:findfont: Matching sans\-serif:style=normal:variant=normal:weight=normal:stretch=normal:size=12.0 to DejaVu Sans ('C:\\Users\\maria\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\matplotlib\\mpl-data\\fonts\\ttf\\DejaVuSans.ttf') with score of 0.050000.
-INFO:__main__:[info] map:'vacuum-3rooms-v1'' policy:'q-learning_2' location_sensor:'True' eps:10         max_steps:300
+INFO:__main__:[info] map:'vacuum-3rooms-v1'' policy:'q-learning_2' location_sensor:'True' eps:1         max_steps:150
